@@ -1,128 +1,412 @@
 @import "tailwindcss";
 
-:root {
-  --background: #050508;
-  --foreground: #f8f8ff;
-  --violet-400: #a78bfa;
-  --violet-500: #8b5cf6;
-  --violet-600: #7c3aed;
-  --violet-700: #6d28d9;
-  --surface: #0f0f14;
-  --surface-elevated: #16161f;
-  --border: rgba(139, 92, 246, 0.2);
+/* ============================================================
+   Debt Manager Pro — design system
+   Dark is default; [data-theme="light"] overrides tokens.
+   ============================================================ */
+
+:root,
+:root[data-theme="dark"] {
+  --bg: #0a0b12;
+  --bg-2: #0f1119;
+  --surface: #14161f;
+  --surface-2: #191c27;
+  --surface-hover: #1f2230;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --fg: #f4f5fb;
+  --fg-2: #c3c6d4;
+  --muted: #7f8398;
+  --brand: #7c6cff;
+  --brand-2: #9d8dff;
+  --brand-soft: rgba(124, 108, 255, 0.16);
+  --accent: #22d3ee;
+  --ok: #34d399;
+  --ok-soft: rgba(52, 211, 153, 0.15);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.15);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.15);
+  --shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.6);
+  --ring: 0 0 0 3px rgba(124, 108, 255, 0.35);
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f5fa;
+  --bg-2: #eceef6;
+  --surface: #ffffff;
+  --surface-2: #f7f8fc;
+  --surface-hover: #f0f1f8;
+  --border: rgba(20, 22, 40, 0.09);
+  --border-strong: rgba(20, 22, 40, 0.16);
+  --fg: #14161f;
+  --fg-2: #3c4053;
+  --muted: #6b7086;
+  --brand: #6a5bff;
+  --brand-2: #5546e6;
+  --brand-soft: rgba(106, 91, 255, 0.12);
+  --accent: #0891b2;
+  --ok: #059669;
+  --ok-soft: rgba(5, 150, 105, 0.12);
+  --warn: #d97706;
+  --warn-soft: rgba(217, 119, 6, 0.14);
+  --danger: #e11d48;
+  --danger-soft: rgba(225, 29, 72, 0.12);
+  --shadow: 0 12px 40px -18px rgba(30, 30, 60, 0.28);
+  --ring: 0 0 0 3px rgba(106, 91, 255, 0.28);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-violet-400: var(--violet-400);
-  --color-violet-500: var(--violet-500);
-  --color-violet-600: var(--violet-600);
-  --color-violet-700: var(--violet-700);
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
-  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-2: var(--surface-2);
   --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-muted: var(--muted);
+  --color-brand: var(--brand);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0) scale(1);
+@layer base {
+  * {
+    border-color: var(--border);
   }
-  50% {
-    transform: translateY(-20px) scale(1.05);
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-geist-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--brand-soft);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
   }
 }
 
-@keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 0.7;
-  }
+/* ---------- Reusable components (in @layer so Tailwind utilities win) ---------- */
+@layer components {
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
 }
 
-@keyframes fade-up {
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  white-space: nowrap;
+  user-select: none;
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff;
+  box-shadow: 0 8px 20px -8px var(--brand);
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: var(--surface-2);
+  color: var(--fg);
+  border-color: var(--border);
+}
+.btn-ghost:hover {
+  background: var(--surface-hover);
+}
+.btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: transparent;
+}
+.btn-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-sm {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+  color: var(--fg);
+  font-size: 0.9rem;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--muted);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: var(--ring);
+}
+.label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--fg-2);
+  margin-bottom: 0.35rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+.badge-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.badge-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.badge-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.badge-neutral {
+  background: var(--surface-hover);
+  color: var(--muted);
+}
+.badge-brand {
+  background: var(--brand-soft);
+  color: var(--brand-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 8px;
+  background: var(--surface-hover);
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  object-fit: cover;
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  color: #fff;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.link {
+  color: var(--brand-2);
+  font-weight: 600;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+.hairline {
+  height: 1px;
+  background: var(--border);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 12px;
+  color: var(--fg-2);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.14s ease;
+}
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+.nav-item.active {
+  background: var(--brand-soft);
+  color: var(--brand-2);
+}
+.nav-item.active svg {
+  color: var(--brand-2);
+}
+
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tbl th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 700;
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+}
+.tbl td {
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+.tbl tr:last-child td {
+  border-bottom: none;
+}
+.tbl tbody tr {
+  transition: background 0.12s ease;
+}
+.tbl tbody tr:hover {
+  background: var(--surface-2);
+}
+
+}
+/* end @layer components */
+
+@keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% center;
-  }
-  100% {
-    background-position: -200% center;
-  }
+.animate-in {
+  animation: fadeInUp 0.35s ease both;
 }
-
-@keyframes gradient-shift {
-  0%,
-  100% {
-    background-position: 0% 50%;
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
   }
-  50% {
-    background-position: 100% 50%;
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 6, 12, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5vh 1rem 2rem;
+  overflow-y: auto;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 560px;
+  animation: scaleIn 0.2s ease both;
 }
 
-.animate-float-delayed {
-  animation: float 6s ease-in-out 2s infinite;
+.timeline-line {
+  position: absolute;
+  left: 11px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--border);
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 4s ease-in-out infinite;
-}
-
-.animate-fade-up {
-  animation: fade-up 0.8s ease-out forwards;
-}
-
-.animate-fade-up-delay-1 {
-  animation: fade-up 0.8s ease-out 0.15s forwards;
-  opacity: 0;
-}
-
-.animate-fade-up-delay-2 {
-  animation: fade-up 0.8s ease-out 0.3s forwards;
-  opacity: 0;
-}
-
-.animate-fade-up-delay-3 {
-  animation: fade-up 0.8s ease-out 0.45s forwards;
-  opacity: 0;
-}
-
-.animate-gradient-text {
-  background-size: 200% auto;
-  animation: shimmer 4s linear infinite;
-}
-
-.animate-gradient-bg {
-  background-size: 200% 200%;
-  animation: gradient-shift 8s ease infinite;
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable,
+  .printable * {
+    visibility: visible;
+  }
+  .printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  .no-print {
+    display: none !important;
+  }
 }
