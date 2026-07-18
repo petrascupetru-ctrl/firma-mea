@@ -213,6 +213,32 @@ export function LoanForm({
   const [notes, setNotes] = useState(loan?.notes ?? "");
   const [location, setLocation] = useState(loan?.location ?? "");
   const [signature, setSignature] = useState<string | undefined>(loan?.signature);
+  const [ocrBusy, setOcrBusy] = useState(false);
+
+  // OCR: scan a receipt/contract photo and try to prefill the amount.
+  const scanReceipt = async (file: File) => {
+    setOcrBusy(true);
+    try {
+      const dataUrl = await fileToDataUrl(file, 1400);
+      const { default: Tesseract } = await import("tesseract.js");
+      const { data } = await Tesseract.recognize(dataUrl, "ron+eng");
+      const text = data.text || "";
+      // Find the largest number that looks like a money amount.
+      const matches = text.match(/\d[\d.,]*\d|\d/g) || [];
+      let best = 0;
+      for (const m of matches) {
+        const norm = parseFloat(m.replace(/\.(?=\d{3}\b)/g, "").replace(",", "."));
+        if (!isNaN(norm) && norm > best) best = norm;
+      }
+      if (best > 0) setAmount(String(best));
+      setContractPhoto(dataUrl);
+      if (best <= 0) alert("Nu am găsit o sumă. Poți completa manual.");
+    } catch {
+      alert("Scanarea a eșuat. Completează manual.");
+    } finally {
+      setOcrBusy(false);
+    }
+  };
 
   const submit = () => {
     const amt = parseFloat(amount);
@@ -252,7 +278,22 @@ export function LoanForm({
 
       <div className="grid grid-cols-3 gap-3">
         <div className="col-span-2">
-          <label className="label">Sumă</label>
+          <div className="flex items-center justify-between">
+            <label className="label">Sumă</label>
+            <label className="cursor-pointer" style={{ fontSize: "0.72rem", color: "var(--brand-2)", fontWeight: 600 }}>
+              {ocrBusy ? "Se scanează…" : "📷 Scanează bon (OCR)"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={ocrBusy}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) scanReceipt(f);
+                }}
+              />
+            </label>
+          </div>
           <input className="input" type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1000" />
         </div>
         <div>

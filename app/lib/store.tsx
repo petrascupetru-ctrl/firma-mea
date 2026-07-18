@@ -10,6 +10,19 @@ import {
   useState,
 } from "react";
 import { DEFAULT_RATES, uid } from "./calc";
+import {
+  b64,
+  cryptoSupported,
+  decryptWithKey,
+  deriveKey,
+  encryptWithKey,
+  exportKeyRaw,
+  importKeyRaw,
+  isEnvelope,
+  randomBytes,
+  unb64,
+  type Envelope,
+} from "./crypto";
 import { seedState } from "./seed";
 import type {
   AppState,
@@ -21,6 +34,8 @@ import type {
 } from "./types";
 
 const STORAGE_KEY = "debt-manager-pro:v1";
+const SALT_KEY = "debt-manager-pro:salt";
+const BIO_KEY = "debt-manager-pro:biokey";
 
 interface StoreContextValue extends AppState {
   ready: boolean;
@@ -48,6 +63,14 @@ interface StoreContextValue extends AppState {
   importState: (json: string) => boolean;
   resetDemo: () => void;
   clearAll: () => void;
+  // security / lock
+  locked: boolean;
+  encryptionEnabled: boolean;
+  unlock: (pin: string) => Promise<boolean>;
+  enableEncryption: (pin: string) => Promise<boolean>;
+  disableEncryption: () => Promise<void>;
+  enableBiometric: () => Promise<boolean>;
+  unlockWithBiometric: () => Promise<boolean>;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -72,7 +95,28 @@ function migrate(state: Partial<AppState>): AppState {
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(() => seedState());
   const [ready, setReady] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
   const loaded = useRef(false);
+  const keyRef = useRef<CryptoKey | null>(null);
+  const encEnabledRef = useRef(false);
+
+  async function persist(next: AppState) {
+    try {
+      if (keyRef.current) {
+        const env = await encryptWithKey(keyRef.current, next);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(env));
+      } else if (encEnabledRef.current) {
+        // Encryption is on but we don't hold the key (locked): NEVER overwrite
+        // the encrypted store with plaintext — that would leak & lose data.
+        return;
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      }
+    } catch {
+      /* storage full / unavailable */
+    }
+  }
 
   // Load persisted state once on mount (localStorage is client-only, so this
   // hydration-from-storage step legitimately synchronizes external state).
@@ -81,7 +125,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        setState(migrate(JSON.parse(raw)));
+        const parsed = JSON.parse(raw);
+        if (isEnvelope(parsed)) {
+          // Data is encrypted — stay locked until the user unlocks with a PIN
+          // (or biometrics). We keep the seed placeholder in state meanwhile.
+          encEnabledRef.current = true;
+          setEncryptionEnabled(true);
+          setLocked(true);
+        } else {
+          setState(migrate(parsed));
+        }
       } else {
         const seeded = seedState();
         setState(seeded);
@@ -95,15 +148,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Persist on change (after initial load).
+  // Persist on change (after initial load). Skips while locked (no real data).
   useEffect(() => {
-    if (!loaded.current) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // storage full / unavailable — ignore silently
-    }
-  }, [state]);
+    if (!loaded.current || locked) return;
+    void persist(state);
+  }, [state, locked]);
 
   // Reflect theme on <html> element.
   useEffect(() => {
@@ -367,6 +416,108 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // ---- Security / encryption ----
+
+  // Decrypt the stored envelope with a PIN and unlock the app.
+  const unlock = useCallback<StoreContextValue["unlock"]>(async (pin) => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const saltRaw = localStorage.getItem(SALT_KEY);
+      if (!raw || !saltRaw) return false;
+      const env = JSON.parse(raw) as Envelope;
+      if (!isEnvelope(env)) return false;
+      const key = await deriveKey(pin, unb64(saltRaw));
+      const data = await decryptWithKey<AppState>(key, env);
+      keyRef.current = key;
+      setState(migrate(data));
+      setLocked(false);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Turn on encryption: derive a key from the PIN and re-save encrypted.
+  const enableEncryption = useCallback<StoreContextValue["enableEncryption"]>(
+    async (pin) => {
+      if (!cryptoSupported()) return false;
+      try {
+        const salt = randomBytes(16);
+        const key = await deriveKey(pin, salt);
+        keyRef.current = key;
+        localStorage.setItem(SALT_KEY, b64(salt));
+        const env = await encryptWithKey(key, state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(env));
+        encEnabledRef.current = true;
+        setEncryptionEnabled(true);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [state],
+  );
+
+  // Turn off encryption: store back as plain JSON and drop keys.
+  const disableEncryption = useCallback<StoreContextValue["disableEncryption"]>(
+    async () => {
+      keyRef.current = null;
+      encEnabledRef.current = false;
+      localStorage.removeItem(SALT_KEY);
+      localStorage.removeItem(BIO_KEY);
+      const { disableBiometric } = await import("./biometric");
+      disableBiometric();
+      setEncryptionEnabled(false);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch {
+        /* ignore */
+      }
+    },
+    [state],
+  );
+
+  // Register a biometric credential and store the (already derived) key so it
+  // can be released after a successful Face/Touch ID verification.
+  const enableBiometric = useCallback<StoreContextValue["enableBiometric"]>(async () => {
+    if (!keyRef.current) return false; // encryption must be enabled first
+    try {
+      const { registerBiometric } = await import("./biometric");
+      const ok = await registerBiometric();
+      if (!ok) return false;
+      const raw = await exportKeyRaw(keyRef.current);
+      localStorage.setItem(BIO_KEY, raw);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // Verify biometrics, then use the stored key to decrypt and unlock.
+  const unlockWithBiometric = useCallback<StoreContextValue["unlockWithBiometric"]>(
+    async () => {
+      try {
+        const { assertBiometric } = await import("./biometric");
+        const ok = await assertBiometric();
+        if (!ok) return false;
+        const rawKey = localStorage.getItem(BIO_KEY);
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!rawKey || !raw) return false;
+        const key = await importKeyRaw(rawKey);
+        const env = JSON.parse(raw) as Envelope;
+        if (!isEnvelope(env)) return false;
+        const data = await decryptWithKey<AppState>(key, env);
+        keyRef.current = key;
+        setState(migrate(data));
+        setLocked(false);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
   const value = useMemo<StoreContextValue>(
     () => ({
       ...state,
@@ -386,6 +537,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       importState,
       resetDemo,
       clearAll,
+      locked,
+      encryptionEnabled,
+      unlock,
+      enableEncryption,
+      disableEncryption,
+      enableBiometric,
+      unlockWithBiometric,
     }),
     [
       state,
@@ -405,6 +563,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       importState,
       resetDemo,
       clearAll,
+      locked,
+      encryptionEnabled,
+      unlock,
+      enableEncryption,
+      disableEncryption,
+      enableBiometric,
+      unlockWithBiometric,
     ],
   );
 
