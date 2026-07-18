@@ -1,0 +1,202 @@
+import { DEFAULT_RATES } from "./calc";
+import type { AppState } from "./types";
+
+// Demo data so the app is immediately explorable on first run.
+function iso(daysFromNow: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  return d.toISOString().slice(0, 10);
+}
+
+export function seedState(): AppState {
+  const people = [
+    {
+      id: "p1",
+      firstName: "Andrei",
+      lastName: "Popescu",
+      nickname: "Deli",
+      phone: "0722111222",
+      email: "andrei.popescu@example.com",
+      address: "Str. Mihai Viteazu 12, Alba Iulia",
+      cnp: "",
+      notes: "Coleg de liceu. De încredere.",
+      labels: ["Prieteni"],
+      archived: false,
+      createdAt: iso(-120),
+    },
+    {
+      id: "p2",
+      firstName: "Maria",
+      lastName: "Ionescu",
+      nickname: "",
+      phone: "0733444555",
+      email: "maria.i@example.com",
+      address: "Bd. Transilvaniei 4, Cluj-Napoca",
+      cnp: "",
+      notes: "Verișoară.",
+      labels: ["Familie"],
+      archived: false,
+      createdAt: iso(-90),
+    },
+    {
+      id: "p3",
+      firstName: "Bogdan",
+      lastName: "Radu",
+      nickname: "Bogdi",
+      phone: "0744666777",
+      email: "",
+      address: "Str. Libertății 88, Sibiu",
+      cnp: "",
+      notes: "Client. Întârzie des.",
+      labels: ["Clienți"],
+      archived: false,
+      createdAt: iso(-200),
+    },
+    {
+      id: "p4",
+      firstName: "Elena",
+      lastName: "Dumitru",
+      nickname: "",
+      phone: "0755888999",
+      email: "elena.d@example.com",
+      address: "Str. Florilor 2, Brașov",
+      cnp: "",
+      notes: "",
+      labels: ["Prieteni"],
+      archived: false,
+      createdAt: iso(-60),
+    },
+  ];
+
+  const loans = [
+    {
+      id: "l1",
+      personId: "p1",
+      amount: 5000,
+      currency: "RON" as const,
+      date: iso(-100),
+      dueDate: iso(20),
+      interestRate: 0,
+      reason: "Reparație mașină",
+      method: "transfer" as const,
+      documents: [],
+      notes: "",
+      createdAt: iso(-100),
+    },
+    {
+      id: "l2",
+      personId: "p2",
+      amount: 800,
+      currency: "EUR" as const,
+      date: iso(-80),
+      dueDate: iso(5),
+      interestRate: 5,
+      reason: "Vacanță",
+      method: "revolut" as const,
+      documents: [],
+      notes: "",
+      createdAt: iso(-80),
+    },
+    {
+      id: "l3",
+      personId: "p3",
+      amount: 3000,
+      currency: "RON" as const,
+      date: iso(-150),
+      dueDate: iso(-10),
+      interestRate: 10,
+      reason: "Marfă magazin",
+      method: "numerar" as const,
+      documents: [],
+      notes: "A promis că achită săptămâna asta.",
+      createdAt: iso(-150),
+    },
+    {
+      id: "l4",
+      personId: "p4",
+      amount: 1200,
+      currency: "RON" as const,
+      date: iso(-40),
+      dueDate: iso(-2),
+      interestRate: 0,
+      reason: "Chirie",
+      method: "card" as const,
+      documents: [],
+      notes: "",
+      createdAt: iso(-40),
+    },
+    {
+      id: "l5",
+      personId: "p1",
+      amount: 1500,
+      currency: "RON" as const,
+      date: iso(-30),
+      dueDate: iso(45),
+      interestRate: 0,
+      reason: "Împrumut personal",
+      method: "numerar" as const,
+      documents: [],
+      notes: "",
+      createdAt: iso(-30),
+    },
+  ];
+
+  const payments = [
+    {
+      id: "pay1",
+      loanId: "l1",
+      amount: 2000,
+      date: iso(-60),
+      method: "transfer" as const,
+      note: "Prima tranșă",
+      createdAt: iso(-60),
+    },
+    {
+      id: "pay2",
+      loanId: "l1",
+      amount: 1000,
+      date: iso(-20),
+      method: "revolut" as const,
+      note: "",
+      createdAt: iso(-20),
+    },
+    {
+      id: "pay3",
+      loanId: "l3",
+      amount: 500,
+      date: iso(-90),
+      method: "numerar" as const,
+      note: "",
+      createdAt: iso(-90),
+    },
+    {
+      id: "pay4",
+      loanId: "l4",
+      amount: 1200,
+      date: iso(-5),
+      method: "card" as const,
+      note: "Achitat integral",
+      createdAt: iso(-5),
+    },
+  ];
+
+  return {
+    people,
+    loans,
+    payments,
+    audit: [
+      {
+        id: "a1",
+        timestamp: new Date().toISOString(),
+        action: "create",
+        entity: "settings",
+        description: "Date demonstrative încărcate.",
+      },
+    ],
+    settings: {
+      theme: "dark",
+      baseCurrency: "RON",
+      rates: { ...DEFAULT_RATES },
+    },
+  };
+}
