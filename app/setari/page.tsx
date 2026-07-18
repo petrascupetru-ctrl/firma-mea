@@ -13,6 +13,13 @@ import {
   requestNotificationPermission,
   runDueReminders,
 } from "../lib/notify";
+import {
+  disablePush,
+  enablePush,
+  pushEnabledLocally,
+  pushSupported,
+  sendTestPush,
+} from "../lib/push";
 import { fetchLiveRates } from "../lib/rates";
 import { useStore } from "../lib/store";
 import { exportXlsx } from "../lib/xlsx";
@@ -38,14 +45,44 @@ export default function SettingsPage() {
   const [notifPerm, setNotifPerm] = useState<string>("default");
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioOn, setBioOn] = useState(false);
+  const [pushStatus, setPushStatus] = useState<{
+    ready: boolean;
+    storage: boolean;
+    vapid: boolean;
+  } | null>(null);
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (notificationsSupported()) setNotifPerm(Notification.permission);
     platformAuthenticatorAvailable().then(setBioAvailable);
     setBioOn(biometricEnabled());
+    setPushOn(pushEnabledLocally());
+    fetch("/api/push/status")
+      .then((r) => r.json())
+      .then(setPushStatus)
+      .catch(() => setPushStatus(null));
   }, [store.encryptionEnabled]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  const doEnablePush = async () => {
+    setPushBusy(true);
+    setPushMsg(null);
+    const res = await enablePush(store.loans, store.payments, store.people);
+    setPushBusy(false);
+    if (res.ok) {
+      setPushOn(true);
+      setPushMsg("✓ Notificări push activate. Apasă „Trimite test” pentru verificare.");
+    } else if (res.reason === "denied") {
+      setPushMsg("✗ Permisiunea a fost refuzată din browser.");
+    } else if (res.reason === "unsupported") {
+      setPushMsg("✗ Acest browser nu suportă push. Pe iPhone: adaugă aplicația pe ecranul principal.");
+    } else {
+      setPushMsg("✗ Serverul de notificări nu este configurat încă (vezi mai jos).");
+    }
+  };
 
   const setRate = (c: Currency, v: string) => {
     store.updateSettings({
@@ -175,6 +212,73 @@ export default function SettingsPage() {
             )}
           </div>
         )}
+
+        {/* Real push notifications (work when the app is closed) */}
+        <div className="hairline my-4" />
+        <h3 className="font-bold text-sm mb-2">Push pe telefon (când aplicația e închisă)</h3>
+        {!pushSupported() ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            Browserul nu suportă push. Pe iPhone, adaugă aplicația pe ecranul principal
+            (Share → „Adaugă pe ecranul principal”) și redeschide-o de acolo.
+          </p>
+        ) : pushStatus && !pushStatus.ready ? (
+          <div className="panel p-3" style={{ background: "var(--warn-soft)", border: "none" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--warn)" }}>
+              Serverul de notificări nu e configurat complet.
+            </p>
+            <ul className="text-xs mt-2 space-y-1" style={{ color: "var(--fg-2)" }}>
+              <li>{pushStatus.storage ? "✓" : "✗"} Stocare (Vercel KV / Upstash)</li>
+              <li>{pushStatus.vapid ? "✓" : "✗"} Chei VAPID (VAPID_PRIVATE_KEY)</li>
+            </ul>
+            <p className="text-xs mt-2" style={{ color: "var(--muted)" }}>
+              Vezi pașii din <code>SETUP-NOTIFICARI.md</code> din proiect.
+            </p>
+          </div>
+        ) : pushOn ? (
+          <div className="space-y-2">
+            <p className="text-sm" style={{ color: "var(--ok)" }}>
+              ✓ Push activat pe acest dispozitiv.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={pushBusy}
+                onClick={async () => {
+                  setPushBusy(true);
+                  const ok = await sendTestPush();
+                  setPushBusy(false);
+                  setPushMsg(ok ? "✓ Test trimis. Ar trebui să primești o notificare." : "✗ Testul a eșuat.");
+                }}
+              >
+                Trimite test
+              </button>
+              <button
+                className="btn btn-danger btn-sm"
+                disabled={pushBusy}
+                onClick={async () => {
+                  setPushBusy(true);
+                  await disablePush();
+                  setPushBusy(false);
+                  setPushOn(false);
+                  setPushMsg(null);
+                }}
+              >
+                Dezactivează push
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+              Primește notificări pe telefon chiar și când aplicația e închisă.
+            </p>
+            <button className="btn btn-primary" disabled={pushBusy} onClick={doEnablePush}>
+              <IconBell width={16} height={16} />
+              {pushBusy ? "Se activează…" : "Activează push pe telefon"}
+            </button>
+          </div>
+        )}
+        {pushMsg && <p className="text-sm mt-2">{pushMsg}</p>}
       </div>
 
       {/* Security */}

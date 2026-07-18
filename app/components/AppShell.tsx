@@ -11,6 +11,7 @@ import {
   personFullName,
 } from "../lib/calc";
 import { runDueReminders } from "../lib/notify";
+import { syncPush } from "../lib/push";
 import { useStore } from "../lib/store";
 import { PinLock } from "./PinLock";
 import { Avatar } from "./ui";
@@ -57,10 +58,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const activePeople = store.people;
 
-  // Fire browser reminders for due/overdue loans once the app is unlocked.
+  // Fire in-app reminders and keep the push backend's reminder list in sync
+  // once the app is unlocked.
   useEffect(() => {
     if (store.locked || !store.ready) return;
     void runDueReminders(store.loans, store.payments, store.people);
+    void syncPush(store.loans, store.payments, store.people);
   }, [store.locked, store.ready, store.loans, store.payments, store.people]);
 
   // ---- Global search results ----

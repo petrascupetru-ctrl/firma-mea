@@ -47,6 +47,26 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+// Real push notifications delivered by the backend (work when app is closed).
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "Debt Manager Pro", body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Debt Manager Pro", {
+      body: data.body || "",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: data.tag,
+      data: { url: data.url || "/" },
+      vibrate: [80, 40, 80],
+    }),
+  );
+});
+
 // Show a notification when the page asks the SW to (used for due-date reminders).
 self.addEventListener("message", (event) => {
   const data = event.data || {};
