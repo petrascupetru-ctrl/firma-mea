@@ -25,6 +25,7 @@ import {
   IconMoon,
   IconSearch,
   IconSettings,
+  IconSparkle,
   IconSun,
   IconUsers,
   IconWallet,
@@ -38,6 +39,7 @@ const NAV = [
   { href: "/plati", label: "Plăți", icon: IconCalc },
   { href: "/calendar", label: "Calendar", icon: IconCalendar },
   { href: "/rapoarte", label: "Rapoarte", icon: IconChart },
+  { href: "/asistent", label: "Asistent AI", icon: IconSparkle },
   { href: "/setari", label: "Setări", icon: IconSettings },
 ];
 

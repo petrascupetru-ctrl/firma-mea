@@ -22,6 +22,9 @@ funcționează complet **offline**.
 - **Status colorat** — 🟢 Achitat · 🟡 Aproape de scadență · 🔴 Restanță.
 - **Căutare** rapidă (nume, telefon, sumă, dată, observații) și **filtre**
   (restante, achitate, luna/anul curent, peste 1000, după persoană).
+- **Asistent AI** — chat în română care ține evidența cu tine: cine datorează,
+  cine întârzie, rezumate, prognoze și mesaje de reminder generate automat
+  (Claude / Anthropic; necesită `ANTHROPIC_API_KEY` — vezi `SETUP-ASISTENT-AI.md`).
 - **Notificări** — alerte în browser (scadențe mâine / azi, întârzieri 3/7/30 zile),
   plus centrul de notificări din aplicație.
 - **Remindere** — WhatsApp și Email cu mesaj generat automat.
