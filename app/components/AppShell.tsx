@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   daysUntil,
   formatMoney,
@@ -10,6 +10,8 @@ import {
   loanStatus,
   personFullName,
 } from "../lib/calc";
+import { runDueReminders } from "../lib/notify";
+import { syncPush } from "../lib/push";
 import { useStore } from "../lib/store";
 import { PinLock } from "./PinLock";
 import { Avatar } from "./ui";
@@ -23,6 +25,7 @@ import {
   IconMoon,
   IconSearch,
   IconSettings,
+  IconSparkle,
   IconSun,
   IconUsers,
   IconWallet,
@@ -36,6 +39,7 @@ const NAV = [
   { href: "/plati", label: "Plăți", icon: IconCalc },
   { href: "/calendar", label: "Calendar", icon: IconCalendar },
   { href: "/rapoarte", label: "Rapoarte", icon: IconChart },
+  { href: "/asistent", label: "Asistent AI", icon: IconSparkle },
   { href: "/setari", label: "Setări", icon: IconSettings },
 ];
 
@@ -47,8 +51,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [query, setQuery] = useState("");
   const [searchFocus, setSearchFocus] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  // Data lives in localStorage (client-only), so render page content after
+  // mount to avoid server/client hydration mismatches on dynamic values.
+  const [hydrated, setHydrated] = useState(false);
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => setHydrated(true), []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const activePeople = store.people;
+
+  // Fire in-app reminders and keep the push backend's reminder list in sync
+  // once the app is unlocked.
+  useEffect(() => {
+    if (store.locked || !store.ready) return;
+    void runDueReminders(store.loans, store.payments, store.people);
+    void syncPush(store.loans, store.payments, store.people);
+  }, [store.locked, store.ready, store.loans, store.payments, store.people]);
 
   // ---- Global search results ----
   const results = useMemo(() => {
@@ -393,7 +411,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="px-4 lg:px-6 py-6 max-w-[1200px] mx-auto">{children}</main>
+        <main className="px-4 lg:px-6 py-6 max-w-[1200px] mx-auto">
+          {hydrated ? (
+            children
+          ) : (
+            <div className="flex items-center justify-center" style={{ minHeight: "60vh" }}>
+              <div
+                className="rounded-full animate-spin"
+                style={{
+                  width: 32,
+                  height: 32,
+                  border: "3px solid var(--border)",
+                  borderTopColor: "var(--brand)",
+                }}
+              />
+            </div>
+          )}
+        </main>
       </div>
     </div>
     </PinLock>

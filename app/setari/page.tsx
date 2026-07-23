@@ -1,12 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { IconDownload, IconMoon, IconSun } from "../components/Icons";
+import { useEffect, useRef, useState } from "react";
+import { IconBell, IconDownload, IconMoon, IconSun } from "../components/Icons";
 import { ConfirmButton } from "../components/ui";
+import {
+  biometricEnabled,
+  platformAuthenticatorAvailable,
+} from "../lib/biometric";
+import { cryptoSupported } from "../lib/crypto";
+import {
+  notificationsSupported,
+  requestNotificationPermission,
+  runDueReminders,
+} from "../lib/notify";
+import {
+  disablePush,
+  enablePush,
+  pushEnabledLocally,
+  pushSupported,
+  sendTestPush,
+} from "../lib/push";
+import { fetchLiveRates } from "../lib/rates";
 import { useStore } from "../lib/store";
+import { exportXlsx } from "../lib/xlsx";
 import { CURRENCIES, type Currency } from "../lib/types";
-
-const PIN_KEY = "debt-manager-pro:pin";
 
 function download(filename: string, content: string, type: string) {
   const blob = new Blob([content], { type });
@@ -23,13 +40,67 @@ export default function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [pin, setPin] = useState("");
   const [importMsg, setImportMsg] = useState<string | null>(null);
-  const hasPin =
-    typeof window !== "undefined" && !!localStorage.getItem(PIN_KEY);
+  const [rateMsg, setRateMsg] = useState<string | null>(null);
+  const [ratesBusy, setRatesBusy] = useState(false);
+  const [notifPerm, setNotifPerm] = useState<string>("default");
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioOn, setBioOn] = useState(false);
+  const [pushStatus, setPushStatus] = useState<{
+    ready: boolean;
+    storage: boolean;
+    vapid: boolean;
+  } | null>(null);
+  const [pushOn, setPushOn] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (notificationsSupported()) setNotifPerm(Notification.permission);
+    platformAuthenticatorAvailable().then(setBioAvailable);
+    setBioOn(biometricEnabled());
+    setPushOn(pushEnabledLocally());
+    fetch("/api/push/status")
+      .then((r) => r.json())
+      .then(setPushStatus)
+      .catch(() => setPushStatus(null));
+  }, [store.encryptionEnabled]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const doEnablePush = async () => {
+    setPushBusy(true);
+    setPushMsg(null);
+    const res = await enablePush(store.loans, store.payments, store.people);
+    setPushBusy(false);
+    if (res.ok) {
+      setPushOn(true);
+      setPushMsg("✓ Notificări push activate. Apasă „Trimite test” pentru verificare.");
+    } else if (res.reason === "denied") {
+      setPushMsg("✗ Permisiunea a fost refuzată din browser.");
+    } else if (res.reason === "unsupported") {
+      setPushMsg("✗ Acest browser nu suportă push. Pe iPhone: adaugă aplicația pe ecranul principal.");
+    } else {
+      setPushMsg("✗ Serverul de notificări nu este configurat încă (vezi mai jos).");
+    }
+  };
 
   const setRate = (c: Currency, v: string) => {
     store.updateSettings({
       rates: { ...store.settings.rates, [c]: parseFloat(v) || 0 },
     });
+  };
+
+  const refreshRates = async () => {
+    setRatesBusy(true);
+    setRateMsg(null);
+    const live = await fetchLiveRates();
+    setRatesBusy(false);
+    if (live) {
+      store.updateSettings({ rates: live });
+      setRateMsg("✓ Cursuri actualizate de la BCE (frankfurter.app).");
+    } else {
+      setRateMsg("✗ Nu am putut prelua cursurile (verifică internetul).");
+    }
   };
 
   const doImport = async (file: File) => {
@@ -38,11 +109,19 @@ export default function SettingsPage() {
     else setImportMsg("✗ Fișier invalid.");
   };
 
+  const enableNotif = async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPerm(perm);
+    if (perm === "granted") await runDueReminders(store.loans, store.payments, store.people);
+  };
+
   return (
     <div className="space-y-5 max-w-3xl">
       <div>
         <h1 className="text-2xl font-extrabold">Setări</h1>
-        <p className="text-sm" style={{ color: "var(--muted)" }}>Personalizare, valute, securitate și backup.</p>
+        <p className="text-sm" style={{ color: "var(--muted)" }}>
+          Personalizare, valute, notificări, securitate și backup.
+        </p>
       </div>
 
       {/* Appearance */}
@@ -66,7 +145,13 @@ export default function SettingsPage() {
 
       {/* Currency */}
       <div className="card p-5">
-        <h2 className="font-bold mb-3">Valute</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold">Valute</h2>
+          <button className="btn btn-ghost btn-sm" onClick={refreshRates} disabled={ratesBusy}>
+            <IconDownload width={15} height={15} />
+            {ratesBusy ? "Se actualizează…" : "Actualizează cursurile live"}
+          </button>
+        </div>
         <div className="max-w-xs mb-4">
           <label className="label">Monedă de bază</label>
           <select
@@ -95,62 +180,202 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+        {rateMsg && <p className="text-sm mt-2">{rateMsg}</p>}
         <p className="text-xs mt-2" style={{ color: "var(--muted)" }}>
           Conversia sumelor în rapoarte folosește aceste cursuri.
         </p>
       </div>
 
+      {/* Notifications */}
+      <div className="card p-5">
+        <h2 className="font-bold mb-2">Notificări</h2>
+        {!notificationsSupported() ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            Browserul nu suportă notificări.
+          </p>
+        ) : notifPerm === "granted" ? (
+          <p className="text-sm" style={{ color: "var(--ok)" }}>
+            ✓ Notificările sunt activate. Vei fi anunțat despre scadențe și întârzieri.
+          </p>
+        ) : (
+          <div>
+            <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+              Primește alerte pentru scadențe (mâine / azi) și întârzieri (3 / 7 / 30 zile).
+            </p>
+            <button className="btn btn-primary" onClick={enableNotif}>
+              <IconBell width={16} height={16} /> Activează notificările
+            </button>
+            {notifPerm === "denied" && (
+              <p className="text-xs mt-2" style={{ color: "var(--danger)" }}>
+                Notificările sunt blocate din setările browserului.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Real push notifications (work when the app is closed) */}
+        <div className="hairline my-4" />
+        <h3 className="font-bold text-sm mb-2">Push pe telefon (când aplicația e închisă)</h3>
+        {!pushSupported() ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            Browserul nu suportă push. Pe iPhone, adaugă aplicația pe ecranul principal
+            (Share → „Adaugă pe ecranul principal”) și redeschide-o de acolo.
+          </p>
+        ) : pushStatus && !pushStatus.ready ? (
+          <div className="panel p-3" style={{ background: "var(--warn-soft)", border: "none" }}>
+            <p className="text-sm font-semibold" style={{ color: "var(--warn)" }}>
+              Serverul de notificări nu e configurat complet.
+            </p>
+            <ul className="text-xs mt-2 space-y-1" style={{ color: "var(--fg-2)" }}>
+              <li>{pushStatus.storage ? "✓" : "✗"} Stocare (Vercel KV / Upstash)</li>
+              <li>{pushStatus.vapid ? "✓" : "✗"} Chei VAPID (VAPID_PRIVATE_KEY)</li>
+            </ul>
+            <p className="text-xs mt-2" style={{ color: "var(--muted)" }}>
+              Vezi pașii din <code>SETUP-NOTIFICARI.md</code> din proiect.
+            </p>
+          </div>
+        ) : pushOn ? (
+          <div className="space-y-2">
+            <p className="text-sm" style={{ color: "var(--ok)" }}>
+              ✓ Push activat pe acest dispozitiv.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn btn-ghost btn-sm"
+                disabled={pushBusy}
+                onClick={async () => {
+                  setPushBusy(true);
+                  const ok = await sendTestPush();
+                  setPushBusy(false);
+                  setPushMsg(ok ? "✓ Test trimis. Ar trebui să primești o notificare." : "✗ Testul a eșuat.");
+                }}
+              >
+                Trimite test
+              </button>
+              <button
+                className="btn btn-danger btn-sm"
+                disabled={pushBusy}
+                onClick={async () => {
+                  setPushBusy(true);
+                  await disablePush();
+                  setPushBusy(false);
+                  setPushOn(false);
+                  setPushMsg(null);
+                }}
+              >
+                Dezactivează push
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+              Primește notificări pe telefon chiar și când aplicația e închisă.
+            </p>
+            <button className="btn btn-primary" disabled={pushBusy} onClick={doEnablePush}>
+              <IconBell width={16} height={16} />
+              {pushBusy ? "Se activează…" : "Activează push pe telefon"}
+            </button>
+          </div>
+        )}
+        {pushMsg && <p className="text-sm mt-2">{pushMsg}</p>}
+      </div>
+
       {/* Security */}
       <div className="card p-5">
-        <h2 className="font-bold mb-3">Securitate</h2>
-        <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
-          Setează un cod PIN pentru a bloca accesul la aplicație pe acest dispozitiv.
-        </p>
-        {hasPin ? (
-          <ConfirmButton
-            className="btn btn-danger"
-            message="Elimini codul PIN?"
-            onConfirm={() => {
-              localStorage.removeItem(PIN_KEY);
-              location.reload();
-            }}
-          >
-            Elimină PIN-ul
-          </ConfirmButton>
-        ) : (
-          <div className="flex gap-2 items-end max-w-xs">
-            <div className="flex-1">
-              <label className="label">Cod PIN (min. 4 cifre)</label>
-              <input
-                className="input"
-                type="password"
-                inputMode="numeric"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                placeholder="••••"
-              />
-            </div>
-            <button
-              className="btn btn-primary"
-              disabled={pin.length < 4}
-              onClick={() => {
-                localStorage.setItem(PIN_KEY, pin);
-                setPin("");
-                alert("PIN setat. Va fi cerut la următoarea deschidere.");
+        <h2 className="font-bold mb-2">Securitate</h2>
+        {!cryptoSupported() ? (
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            Criptarea nu este disponibilă în acest context (necesită HTTPS).
+          </p>
+        ) : store.encryptionEnabled ? (
+          <div className="space-y-3">
+            <p className="text-sm" style={{ color: "var(--ok)" }}>
+              🔒 Datele sunt criptate și blocate cu PIN.
+            </p>
+            {bioAvailable && (
+              <div className="flex items-center gap-2">
+                {bioOn ? (
+                  <span className="badge badge-ok">Biometrie activă</span>
+                ) : (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={async () => {
+                      const ok = await store.enableBiometric();
+                      setBioOn(ok);
+                      if (!ok) alert("Nu am putut activa biometria pe acest dispozitiv.");
+                    }}
+                  >
+                    Activează Face ID / Touch ID
+                  </button>
+                )}
+              </div>
+            )}
+            <ConfirmButton
+              className="btn btn-danger"
+              message="Dezactivezi criptarea și PIN-ul? Datele redevin necriptate."
+              onConfirm={async () => {
+                await store.disableEncryption();
+                setBioOn(false);
               }}
             >
-              Salvează
-            </button>
+              Dezactivează PIN & criptare
+            </ConfirmButton>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+              Setează un cod PIN. Datele vor fi <b>criptate</b> pe dispozitiv (AES-256) și
+              vor cere PIN la fiecare deschidere.
+            </p>
+            <div className="flex gap-2 items-end max-w-xs">
+              <div className="flex-1">
+                <label className="label">Cod PIN (min. 4 cifre)</label>
+                <input
+                  className="input"
+                  type="password"
+                  inputMode="numeric"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="••••"
+                />
+              </div>
+              <button
+                className="btn btn-primary"
+                disabled={pin.length < 4}
+                onClick={async () => {
+                  const ok = await store.enableEncryption(pin);
+                  setPin("");
+                  if (!ok) alert("Nu am putut activa criptarea.");
+                }}
+              >
+                Activează
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {/* Backup */}
       <div className="card p-5">
-        <h2 className="font-bold mb-3">Backup & Restaurare</h2>
+        <h2 className="font-bold mb-3">Backup & Export</h2>
         <div className="flex flex-wrap gap-2">
           <button className="btn btn-ghost" onClick={() => download("debt-manager-backup.json", store.exportState(), "application/json")}>
-            <IconDownload width={16} height={16} /> Descarcă backup
+            <IconDownload width={16} height={16} /> Backup JSON
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={() =>
+              exportXlsx({
+                people: store.people,
+                loans: store.loans,
+                payments: store.payments,
+                audit: store.audit,
+                settings: store.settings,
+              })
+            }
+          >
+            <IconDownload width={16} height={16} /> Export Excel (.xlsx)
           </button>
           <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
             Restaurează din fișier

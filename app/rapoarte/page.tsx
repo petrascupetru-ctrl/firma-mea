@@ -14,6 +14,7 @@ import {
   personFullName,
 } from "../lib/calc";
 import { useStore } from "../lib/store";
+import { exportXlsx } from "../lib/xlsx";
 
 const MONTHS_RO = ["Ian", "Feb", "Mar", "Apr", "Mai", "Iun", "Iul", "Aug", "Sep", "Oct", "Noi", "Dec"];
 
@@ -120,6 +121,20 @@ export default function ReportsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn btn-ghost btn-sm" onClick={exportCSV}><IconDownload width={15} height={15} /> CSV</button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() =>
+              exportXlsx({
+                people: store.people,
+                loans: store.loans,
+                payments: store.payments,
+                audit: store.audit,
+                settings: store.settings,
+              })
+            }
+          >
+            <IconDownload width={15} height={15} /> Excel
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={exportJSON}><IconDownload width={15} height={15} /> JSON</button>
           <button className="btn btn-ghost btn-sm" onClick={() => window.print()}><IconDownload width={15} height={15} /> PDF</button>
         </div>
